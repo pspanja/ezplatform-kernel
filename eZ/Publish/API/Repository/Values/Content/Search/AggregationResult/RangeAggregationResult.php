@@ -17,7 +17,17 @@ use IteratorAggregate;
 final class RangeAggregationResult extends AggregationResult implements IteratorAggregate, Countable
 {
     /** @var \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResultEntry[] */
-    private $entries = [];
+    private $entries;
+
+    /**
+     * @param \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResultEntry[] $entries
+     */
+    public function __construct(string $name, iterable $entries = [])
+    {
+        parent::__construct($name);
+
+        $this->entries = $entries;
+    }
 
     /**
      * @return \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResultEntry[]

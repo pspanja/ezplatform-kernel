@@ -18,6 +18,13 @@ class TermAggregationResult extends AggregationResult implements IteratorAggrega
     /** @var \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResultEntry[] */
     private $entries = [];
 
+    public function __construct(string $name, array $entries)
+    {
+        parent::__construct($name);
+
+        $this->entries = $entries;
+    }
+
     /**
      * @return \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResultEntry[]
      */
