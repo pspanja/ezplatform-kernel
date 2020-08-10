@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 namespace eZ\Publish\API\Repository\Values\Content\Query\Aggregation;
 
-final class RawTermAggregation extends AbstractTermAggregation
+final class RawTermAggregation extends AbstractTermAggregation implements RawAggregationInterface
 {
     /** @var string */
     private $fieldName;

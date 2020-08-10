@@ -16,13 +16,18 @@ use IteratorAggregate;
 class TermAggregationResult extends AggregationResult implements IteratorAggregate, Countable
 {
     /** @var \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResultEntry[] */
-    private $entries = [];
+    private $entries;
 
-    public function __construct(string $name, array $entries)
+    public function __construct(string $name, array $entries = [])
     {
         parent::__construct($name);
 
         $this->entries = $entries;
+    }
+
+    public function isEmpty(): bool
+    {
+        return empty($this->entries);
     }
 
     /**

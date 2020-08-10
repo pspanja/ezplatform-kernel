@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 namespace eZ\Publish\API\Repository\Values\Content\Query\Aggregation;
 
-final class RawStatsAggregation extends AbstractStatsAggregation
+final class RawStatsAggregation extends AbstractStatsAggregation implements RawAggregationInterface
 {
     /** @var string */
     private $fieldName;

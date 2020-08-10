@@ -53,8 +53,22 @@ abstract class AbstractTermAggregation implements AggregationInterface
         return $this->limit;
     }
 
+    public function setLimit(int $limit): self
+    {
+        $this->limit = $limit;
+
+        return $this;
+    }
+
     public function getMinCount(): int
     {
         return $this->minCount;
+    }
+
+    public function setMinCount(int $minCount): self
+    {
+        $this->minCount = $minCount;
+
+        return $this;
     }
 }

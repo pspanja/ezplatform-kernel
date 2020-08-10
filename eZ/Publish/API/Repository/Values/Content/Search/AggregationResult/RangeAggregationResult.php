@@ -29,6 +29,11 @@ final class RangeAggregationResult extends AggregationResult implements Iterator
         $this->entries = $entries;
     }
 
+    public function isEmpty(): bool
+    {
+        return empty($this->entries);
+    }
+
     /**
      * @return \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResultEntry[]
      */

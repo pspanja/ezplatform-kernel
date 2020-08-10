@@ -12,10 +12,18 @@ use eZ\Publish\API\Repository\Values\ValueObject;
 
 final class Range extends ValueObject
 {
-    /** @var mixed|null */
+    /**
+     * Beginning of the range (included).
+     *
+     * @var int|float|\DateTimeInterface|null
+     */
     private $from;
 
-    /** @var mixed|null */
+    /**
+     * End of the range (excluded).
+     *
+     * @var int|float|\DateTimeInterface|null
+     */
     private $to;
 
     public function __construct($form, $to)

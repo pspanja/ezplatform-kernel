@@ -10,4 +10,22 @@ namespace eZ\Publish\API\Repository\Values\Content\Query\Aggregation;
 
 final class ObjectStateTermAggregation extends AbstractTermAggregation
 {
+    /** @var string */
+    private $objectStateGroupIdentifier;
+
+    public function __construct(
+        string $name,
+        string $objectStateGroupIdentifier,
+        int $limit = self::DEFAULT_LIMIT,
+        int $minCount = self::DEFAULT_MIN_COUNT
+    ) {
+        parent::__construct($name, $limit, $minCount);
+
+        $this->objectStateGroupIdentifier = $objectStateGroupIdentifier;
+    }
+
+    public function getObjectStateGroupIdentifier(): string
+    {
+        return $this->objectStateGroupIdentifier;
+    }
 }
