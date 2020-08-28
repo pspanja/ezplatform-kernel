@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 namespace eZ\Publish\API\Repository\Values\Content\Query\Aggregation;
 
-final class UserTermAggregation extends AbstractTermAggregation
+final class UserMetadataTermAggregation extends AbstractTermAggregation
 {
     /**
      * Owner user.

@@ -6,15 +6,19 @@
  */
 declare(strict_types=1);
 
-use eZ\Publish\API\Repository\Tests\BaseTest;
+namespace eZ\Publish\API\Repository\Tests;
+
+use DateTime;
 use eZ\Publish\API\Repository\Values\Content\LocationQuery;
 use eZ\Publish\API\Repository\Values\Content\Query;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ContentTypeGroupTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ContentTypeTermAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\DateMetadataRangeAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\LanguageTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ObjectStateTermAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Range;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\SectionTermAggregation;
-use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\UserTermAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\UserMetadataTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\VisibilityTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\AggregationInterface;
 use eZ\Publish\API\Repository\Values\Content\Query\Criterion;
@@ -22,6 +26,8 @@ use eZ\Publish\API\Repository\Values\Content\Query\Criterion\ContentTypeIdentifi
 use eZ\Publish\API\Repository\Values\Content\Query\Criterion\LanguageCode;
 use eZ\Publish\API\Repository\Values\Content\Query\Criterion\MatchAll;
 use eZ\Publish\API\Repository\Values\Content\Query\Criterion\SectionIdentifier;
+use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResult;
+use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResultEntry;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResult;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResultEntry;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResultCollection;
@@ -113,8 +119,41 @@ final class SearchServiceAggregationTest extends BaseTest
         $this->assertContentAggregationResult($expectedAggregationResult, $query);
     }
 
-    public function testDateRangeAggregation(): void
+    public function testPublicationDateRangeAggregation(): void
     {
+        $query = $this->createQueryWithAggregation(
+            new DateMetadataRangeAggregation(
+                'publication_date',
+                DateMetadataRangeAggregation::PUBLISHED,
+                [
+                    new Range(null, new DateTime('2019-01-01')),
+                    new Range(new DateTime('2019-01-01'), new DateTime('2020-01-01')),
+                    new Range(new DateTime('2020-01-01'), null),
+                ]
+            ),
+        );
+
+        $expectedAggregationResult = new AggregationResultCollection([
+            new RangeAggregationResult(
+                'publication_date',
+                [
+                    new RangeAggregationResultEntry(
+                        new Range(null, new DateTime('2019-01-01')),
+                        0
+                    ),
+                    new RangeAggregationResultEntry(
+                        new Range(new DateTime('2019-01-01'), new DateTime('2020-01-01')),
+                        0
+                    ),
+                    new RangeAggregationResultEntry(
+                        new Range(new DateTime('2020-01-01'), null),
+                        0
+                    ),
+                ]
+            )
+        ]);
+
+        $this->assertContentAggregationResult($expectedAggregationResult, $query);
     }
 
     public function testLanguageTermAggregation(): void
@@ -191,7 +230,7 @@ final class SearchServiceAggregationTest extends BaseTest
         $userService = $this->getRepository()->getUserService();
 
         $query = $this->createQueryWithAggregation(
-            new UserTermAggregation('owner', UserTermAggregation::OWNER)
+            new UserMetadataTermAggregation('owner', UserMetadataTermAggregation::OWNER)
         );
 
         $expectedAggregationResult = $this->createTermAggregationResult(
@@ -210,7 +249,7 @@ final class SearchServiceAggregationTest extends BaseTest
         $userService = $this->getRepository()->getUserService();
 
         $query = $this->createQueryWithAggregation(
-            new UserTermAggregation('modifier', UserTermAggregation::MODIFIER)
+            new UserMetadataTermAggregation('modifier', UserMetadataTermAggregation::MODIFIER)
         );
 
         $expectedAggregationResult = $this->createTermAggregationResult(
@@ -229,7 +268,7 @@ final class SearchServiceAggregationTest extends BaseTest
         $userService = $this->getRepository()->getUserService();
 
         $query = $this->createQueryWithAggregation(
-            new UserTermAggregation('user_group', UserTermAggregation::GROUP)
+            new UserMetadataTermAggregation('user_group', UserMetadataTermAggregation::GROUP)
         );
 
         $expectedAggregationResult = $this->createTermAggregationResult(
@@ -265,7 +304,8 @@ final class SearchServiceAggregationTest extends BaseTest
         string $name,
         iterable $values,
         ?callable $loader = null
-    ): AggregationResultCollection {
+    ): AggregationResultCollection
+    {
         $entries = [];
         foreach ($values as $key => $count) {
             $entries[] = new TermAggregationResultEntry($loader ? $loader($key) : $key, $count);
@@ -279,7 +319,8 @@ final class SearchServiceAggregationTest extends BaseTest
     private function createQueryWithAggregation(
         AggregationInterface $aggregation,
         Criterion $filter = null
-    ): Query {
+    ): Query
+    {
         $query = new Query();
         $query->aggregations[] = $aggregation;
         $query->filter = $filter ?? new MatchAll();
@@ -304,7 +345,8 @@ final class SearchServiceAggregationTest extends BaseTest
     private function assertContentAggregationResult(
         AggregationResultCollection $expectedResult,
         Query $query
-    ): void {
+    ): void
+    {
         $searchService = $this->getRepository()->getSearchService();
 
         $this->assertEquals(
@@ -316,7 +358,8 @@ final class SearchServiceAggregationTest extends BaseTest
     private function assertLocationAggregationResult(
         AggregationResultCollection $expectedResult,
         Query $query
-    ): void {
+    ): void
+    {
         $searchService = $this->getRepository()->getSearchService();
 
         $this->assertEquals(
