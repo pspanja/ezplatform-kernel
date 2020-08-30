@@ -9,11 +9,15 @@ declare(strict_types=1);
 namespace eZ\Publish\API\Repository\Tests;
 
 use DateTime;
+use eZ\Publish\API\Repository\Exceptions\ContentFieldValidationException;
 use eZ\Publish\API\Repository\Values\Content\LocationQuery;
 use eZ\Publish\API\Repository\Values\Content\Query;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ContentTypeGroupTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ContentTypeTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\DateMetadataRangeAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\CheckboxTermAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\IntegerRangeAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\IntegerStatsAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\LanguageTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ObjectStateTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Range;
@@ -21,16 +25,17 @@ use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\SectionTermAggreg
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\UserMetadataTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\VisibilityTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\AggregationInterface;
-use eZ\Publish\API\Repository\Values\Content\Query\Criterion;
 use eZ\Publish\API\Repository\Values\Content\Query\Criterion\ContentTypeIdentifier;
-use eZ\Publish\API\Repository\Values\Content\Query\Criterion\LanguageCode;
 use eZ\Publish\API\Repository\Values\Content\Query\Criterion\MatchAll;
-use eZ\Publish\API\Repository\Values\Content\Query\Criterion\SectionIdentifier;
+use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResult;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\RangeAggregationResultEntry;
+use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\StatsAggregationResult;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResult;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResultEntry;
-use eZ\Publish\API\Repository\Values\Content\Search\AggregationResultCollection;
+use eZ\Publish\API\Repository\Values\ContentType\ContentType;
+use eZ\Publish\API\Repository\Values\ObjectState\ObjectState;
+use eZ\Publish\Core\FieldType\Checkbox\Value as CheckboxValue;
 
 /**
  * Test case for aggregations in the SearchService.
@@ -42,176 +47,172 @@ use eZ\Publish\API\Repository\Values\Content\Search\AggregationResultCollection;
  */
 final class SearchServiceAggregationTest extends BaseTest
 {
-    public function testFindContentWithContentTypeTermAggregation(): void
+    private const EXAMPLE_CONTENT_TYPE_IDENTIFIER = 'content_type';
+    private const EXAMPLE_FIELD_DEFINITION_IDENTIFIER = 'field';
+
+    protected function setUp(): void
     {
-        $contentTypeService = $this->getRepository()->getContentTypeService();
+        parent::setUp();
 
-        $expectedRawResults = [
-            'folder' => 6,
-            'user_group' => 6,
-            'user' => 2,
-            'common_ini_settings' => 1,
-            'template_look' => 1,
-            'feedback_form' => 1,
-            'landing_page' => 1,
-        ];
-
-        $query = $this->createQueryWithAggregation(
-            new ContentTypeTermAggregation('content_type'),
-            new ContentTypeIdentifier(array_keys($expectedRawResults))
-        );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'content_type',
-            $expectedRawResults,
-            [$contentTypeService, 'loadContentTypeByIdentifier']
-        );
-
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
+//        $searchService = $this->getRepository()->getSearchService();
+//        if (!$searchService->supports(SearchService::CAPABILITY_AGGREGATIONS)) {
+//            $this->markTestSkipped("Search engine doesn't support aggregations");
+//        }
     }
 
-    public function testFindLocationWithContentTypeTermAggregation(): void
-    {
-        $contentTypeService = $this->getRepository()->getContentTypeService();
+    /**
+     * @dataProvider dataProviderForTestAggregation
+     */
+    public function testFindContentWithAggregation(
+        AggregationInterface $aggregation,
+        AggregationResult $expectedResult
+    ): void {
+        $searchService = $this->getRepository()->getSearchService();
 
-        $expectedRawResults = [
-            'folder' => 6,
-            'user_group' => 6,
-            'user' => 2,
-            'common_ini_settings' => 1,
-            'template_look' => 1,
-            'feedback_form' => 1,
-            'landing_page' => 1,
-        ];
+        $query = new Query();
+        $query->aggregations[] = $aggregation;
+        $query->filter = new MatchAll();
+        $query->limit = 0;
 
-        $query = $this->createLocationQueryWithAggregation(
-            new ContentTypeTermAggregation('content_type'),
-            new ContentTypeIdentifier(array_keys($expectedRawResults))
+        $this->assertEquals(
+            $expectedResult,
+            $searchService->findContent($query)->aggregations->first()
         );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'content_type',
-            $expectedRawResults,
-            [$contentTypeService, 'loadContentTypeByIdentifier']
-        );
-
-        $this->assertLocationAggregationResult($expectedAggregationResult, $query);
     }
 
-    public function testContentTypeGroupTermAggregation(): void
-    {
-        $contentTypeService = $this->getRepository()->getContentTypeService();
+    /**
+     * @dataProvider dataProviderForTestAggregation
+     */
+    public function testFindLocationWithAggregation(
+        AggregationInterface $aggregation,
+        AggregationResult $expectedResult
+    ): void {
+        $searchService = $this->getRepository()->getSearchService();
 
-        $query = $this->createQueryWithAggregation(
+        $query = new LocationQuery();
+        $query->aggregations[] = $aggregation;
+        $query->filter = new MatchAll();
+        $query->limit = 0;
+
+        $this->assertEquals(
+            $expectedResult,
+            $searchService->findLocations($query)->aggregations->first()
+        );
+    }
+
+    public function dataProviderForTestAggregation(): iterable
+    {
+        yield ContentTypeTermAggregation::class => $this->createTermAggregationTestCase(
+            new ContentTypeTermAggregation('content_type'),
+            [
+                'folder' => 6,
+                'user_group' => 6,
+                'user' => 2,
+                'common_ini_settings' => 1,
+                'template_look' => 1,
+                'feedback_form' => 1,
+                'landing_page' => 1,
+            ],
+            [$this->getRepository()->getContentTypeService(), 'loadContentTypeByIdentifier']
+        );
+
+        yield ContentTypeGroupTermAggregation::class => $this->createTermAggregationTestCase(
             new ContentTypeGroupTermAggregation('content_type_group'),
-        );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'content_type_group',
             [
                 'Content' => 8,
                 'Users' => 8,
                 'Setup' => 2,
             ],
-            [$contentTypeService, 'loadContentTypeGroupByIdentifier']
+            [$this->getRepository()->getContentTypeService(), 'loadContentTypeGroupByIdentifier']
         );
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
+        yield DateMetadataRangeAggregation::class . '::MODIFIED' => [
+            new DateMetadataRangeAggregation(
+                'modification_date',
+                DateMetadataRangeAggregation::MODIFIED,
+                [
+                    new Range(null, new DateTime('2003-01-01')),
+                    new Range(new DateTime('2003-01-01'), new DateTime('2004-01-01')),
+                    new Range(new DateTime('2004-01-01'), null),
+                ]
+            ),
+            new RangeAggregationResult(
+                'modification_date',
+                [
+                    new RangeAggregationResultEntry(
+                        new Range(null, new DateTime('2003-01-01')),
+                        3
+                    ),
+                    new RangeAggregationResultEntry(
+                        new Range(new DateTime('2003-01-01'), new DateTime('2004-01-01')),
+                        3
+                    ),
+                    new RangeAggregationResultEntry(
+                        new Range(new DateTime('2004-01-01'), null),
+                        12
+                    ),
+                ]
+            ),
+        ];
 
-    public function testPublicationDateRangeAggregation(): void
-    {
-        $query = $this->createQueryWithAggregation(
+        yield DateMetadataRangeAggregation::class . '::PUBLISHED' => [
             new DateMetadataRangeAggregation(
                 'publication_date',
                 DateMetadataRangeAggregation::PUBLISHED,
                 [
-                    new Range(null, new DateTime('2019-01-01')),
-                    new Range(new DateTime('2019-01-01'), new DateTime('2020-01-01')),
-                    new Range(new DateTime('2020-01-01'), null),
+                    new Range(null, new DateTime('2003-01-01')),
+                    new Range(new DateTime('2003-01-01'), new DateTime('2004-01-01')),
+                    new Range(new DateTime('2004-01-01'), null),
                 ]
             ),
-        );
-
-        $expectedAggregationResult = new AggregationResultCollection([
             new RangeAggregationResult(
                 'publication_date',
                 [
                     new RangeAggregationResultEntry(
-                        new Range(null, new DateTime('2019-01-01')),
-                        0
+                        new Range(null, new DateTime('2003-01-01')),
+                        6
                     ),
                     new RangeAggregationResultEntry(
-                        new Range(new DateTime('2019-01-01'), new DateTime('2020-01-01')),
-                        0
+                        new Range(new DateTime('2003-01-01'), new DateTime('2004-01-01')),
+                        2
                     ),
                     new RangeAggregationResultEntry(
-                        new Range(new DateTime('2020-01-01'), null),
-                        0
+                        new Range(new DateTime('2004-01-01'), null),
+                        10
                     ),
                 ]
-            )
-        ]);
+            ),
+        ];
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
-
-    public function testLanguageTermAggregation(): void
-    {
-        $languageService = $this->getRepository()->getContentLanguageService();
-
-        $query = $this->createQueryWithAggregation(
+        yield LanguageTermAggregation::class => $this->createTermAggregationTestCase(
             new LanguageTermAggregation('language'),
-            new LanguageCode(['eng-US', 'eng-GB'])
-        );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'language',
             [
                 'eng-US' => 16,
                 'eng-GB' => 2,
             ],
-            [$languageService, 'loadLanguage']
+            [$this->getRepository()->getContentLanguageService(), 'loadLanguage']
         );
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
-
-    public function testObjectStateTermAggregation(): void
-    {
-        $objectStateService = $this->getRepository()->getObjectStateService();
-
-        $query = $this->createQueryWithAggregation(
-            new ObjectStateTermAggregation('object_state', 'ez_lock')
-        );
-
-        $objectStateGroup = $objectStateService->loadObjectStateGroupByIdentifier('ez_lock');
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'object_state',
+        yield ObjectStateTermAggregation::class => $this->createTermAggregationTestCase(
+            new ObjectStateTermAggregation('object_state', 'ez_lock'),
             [
                 // TODO: Change the state of some content objects to have better test data
                 'not_locked' => 18,
             ],
-            static function (string $identifier) use ($objectStateService, $objectStateGroup) {
+            function (string $identifier): ObjectState {
+                $objectStateService = $this->getRepository()->getObjectStateService();
+
+                static $objectStateGroup = null;
+                if ($objectStateGroup === null) {
+                    $objectStateGroup = $objectStateService->loadObjectStateGroupByIdentifier('ez_lock');
+                }
+
                 return $objectStateService->loadObjectStateByIdentifier($objectStateGroup, $identifier);
             }
         );
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
-
-    public function testSectionTermAggregation(): void
-    {
-        $sectionService = $this->getRepository()->getSectionService();
-
-        $query = $this->createQueryWithAggregation(
+        yield SectionTermAggregation::class => $this->createTermAggregationTestCase(
             new SectionTermAggregation('section'),
-            new SectionIdentifier(['users', 'media', 'standard', 'setup', 'design'])
-        );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'section',
             [
                 'users' => 8,
                 'media' => 4,
@@ -219,152 +220,246 @@ final class SearchServiceAggregationTest extends BaseTest
                 'setup' => 2,
                 'design' => 2,
             ],
-            [$sectionService, 'loadSectionByIdentifier']
+            [$this->getRepository()->getSectionService(), 'loadSectionByIdentifier']
         );
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
-
-    public function testUserOwnerTermAggregation(): void
-    {
-        $userService = $this->getRepository()->getUserService();
-
-        $query = $this->createQueryWithAggregation(
-            new UserMetadataTermAggregation('owner', UserMetadataTermAggregation::OWNER)
-        );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'owner',
+        yield UserMetadataTermAggregation::class . '::OWNER' => $this->createTermAggregationTestCase(
+            new UserMetadataTermAggregation('owner', UserMetadataTermAggregation::OWNER),
             [
                 'admin' => 18,
             ],
-            [$userService, 'loadUserByLogin']
+            [$this->getRepository()->getUserService(), 'loadUserByLogin']
         );
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
-
-    public function testUserModifierTermAggregation(): void
-    {
-        $userService = $this->getRepository()->getUserService();
-
-        $query = $this->createQueryWithAggregation(
-            new UserMetadataTermAggregation('modifier', UserMetadataTermAggregation::MODIFIER)
-        );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'modifier',
-            [
-                'admin' => 18,
-            ],
-            [$userService, 'loadUserByLogin']
-        );
-
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
-
-    public function testUserGroupTermAggregation(): void
-    {
-        $userService = $this->getRepository()->getUserService();
-
-        $query = $this->createQueryWithAggregation(
-            new UserMetadataTermAggregation('user_group', UserMetadataTermAggregation::GROUP)
-        );
-
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'user_group',
+        yield UserMetadataTermAggregation::class . '::GROUP' => $this->createTermAggregationTestCase(
+            new UserMetadataTermAggregation('user_group', UserMetadataTermAggregation::GROUP),
             [
                 12 => 18,
                 14 => 18,
-                4 => 18
+                4 => 18,
             ],
-            [$userService, 'loadUserGroup']
+            [$this->getRepository()->getUserService(), 'loadUserGroup']
         );
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
-
-    public function testVisibilityTermAggregation(): void
-    {
-        $query = $this->createQueryWithAggregation(
-            new VisibilityTermAggregation('visibility')
+        yield UserMetadataTermAggregation::class . '::MODIFIER' => $this->createTermAggregationTestCase(
+            new UserMetadataTermAggregation('modifier', UserMetadataTermAggregation::MODIFIER),
+            [
+                'admin' => 18,
+            ],
+            [$this->getRepository()->getUserService(), 'loadUserByLogin']
         );
 
-        $expectedAggregationResult = $this->createTermAggregationResult(
-            'visibility',
+        yield VisibilityTermAggregation::class => $this->createTermAggregationTestCase(
+            new VisibilityTermAggregation('visibility'),
             [
                 true => 18,
-            ],
+            ]
+        );
+    }
+
+    /**
+     * @dataProvider dataProviderForTestFieldAggregation
+     *
+     * @param \eZ\Publish\API\Repository\Values\Content\Query\AggregationInterface|\eZ\Publish\API\Repository\Values\Content\Query\Aggregation\FieldAggregationInterface $aggregation
+     */
+    public function testFindContentWithFieldAggregation(
+        AggregationInterface $aggregation,
+        string $fieldTypeIdentifier,
+        iterable $fieldValues,
+        AggregationResult $expectedResult
+    ): void {
+        $this->createFieldAggregationFixtures(
+            $aggregation->getContentTypeIdentifier(),
+            $aggregation->getFieldDefinitionIdentifier(),
+            $fieldTypeIdentifier,
+            $fieldValues
         );
 
-        $this->assertContentAggregationResult($expectedAggregationResult, $query);
-    }
+        $searchService = $this->getRepository()->getSearchService();
 
-    private function createTermAggregationResult(
-        string $name,
-        iterable $values,
-        ?callable $loader = null
-    ): AggregationResultCollection
-    {
-        $entries = [];
-        foreach ($values as $key => $count) {
-            $entries[] = new TermAggregationResultEntry($loader ? $loader($key) : $key, $count);
-        }
-
-        return new AggregationResultCollection([
-            new TermAggregationResult($name, $entries),
-        ]);
-    }
-
-    private function createQueryWithAggregation(
-        AggregationInterface $aggregation,
-        Criterion $filter = null
-    ): Query
-    {
         $query = new Query();
         $query->aggregations[] = $aggregation;
-        $query->filter = $filter ?? new MatchAll();
+        $query->filter = new ContentTypeIdentifier($aggregation->getContentTypeIdentifier());
         $query->limit = 0;
 
-        return $query;
+        $this->assertEquals(
+            $expectedResult,
+            $searchService->findContent($query)->aggregations->first()
+        );
     }
 
-    private function createLocationQueryWithAggregation(
+    /**
+     * @dataProvider dataProviderForTestFieldAggregation
+     *
+     * @param \eZ\Publish\API\Repository\Values\Content\Query\AggregationInterface|\eZ\Publish\API\Repository\Values\Content\Query\Aggregation\FieldAggregationInterface $aggregation
+     */
+    public function testFindLocationWithFieldAggregation(
         AggregationInterface $aggregation,
-        Criterion $filter = null
-    ): LocationQuery
-    {
+        string $fieldTypeIdentifier,
+        iterable $fieldValues,
+        AggregationResult $expectedResult
+    ): void {
+        $this->createFieldAggregationFixtures(
+            $aggregation->getContentTypeIdentifier(),
+            $aggregation->getFieldDefinitionIdentifier(),
+            $fieldTypeIdentifier,
+            $fieldValues
+        );
+
+        $searchService = $this->getRepository()->getSearchService();
+
         $query = new LocationQuery();
         $query->aggregations[] = $aggregation;
-        $query->filter = $filter ?? new MatchAll();
+        $query->filter = new ContentTypeIdentifier($aggregation->getContentTypeIdentifier());
         $query->limit = 0;
 
-        return $query;
-    }
-
-    private function assertContentAggregationResult(
-        AggregationResultCollection $expectedResult,
-        Query $query
-    ): void
-    {
-        $searchService = $this->getRepository()->getSearchService();
-
         $this->assertEquals(
             $expectedResult,
-            $searchService->findContent($query)->aggregations
+            $searchService->findLocations($query)->aggregations->first()
         );
     }
 
-    private function assertLocationAggregationResult(
-        AggregationResultCollection $expectedResult,
-        Query $query
-    ): void
+    public function dataProviderForTestFieldAggregation(): iterable
     {
-        $searchService = $this->getRepository()->getSearchService();
+        yield CheckboxTermAggregation::class => [
+            new CheckboxTermAggregation('checkbox_term', 'content_type', 'boolean'),
+            'ezboolean',
+            [
+                new CheckboxValue(true),
+                new CheckboxValue(true),
+                new CheckboxValue(true),
+                new CheckboxValue(false),
+                new CheckboxValue(false),
+            ],
+            new TermAggregationResult(
+                'checkbox_term',
+                [
+                    new TermAggregationResultEntry(true, 3),
+                    new TermAggregationResultEntry(false, 2),
+                ]
+            ),
+        ];
 
-        $this->assertEquals(
-            $expectedResult,
-            $searchService->findLocations($query)->aggregations
+        yield IntegerStatsAggregation::class => [
+            new IntegerStatsAggregation('integer_stats', 'content_type', 'integer'),
+            'ezinteger',
+            [1, 2, 3, 5, 8, 13, 21],
+            new StatsAggregationResult(
+                'integer_stats',
+                7,
+                1,
+                21,
+                7.571428571428571,
+                53
+            ),
+        ];
+
+        yield IntegerRangeAggregation::class => [
+            new IntegerRangeAggregation('integer_range', 'content_type', 'integer', [
+                new Range(null, 10),
+                new Range(10, 25),
+                new Range(25, 50),
+                new Range(50, null),
+            ]),
+            'ezinteger',
+            range(1, 100),
+            new RangeAggregationResult(
+                'integer_range',
+                [
+                    new RangeAggregationResultEntry(new Range(null, 10), 10),
+                    new RangeAggregationResultEntry(new Range(10, 25), 15),
+                    new RangeAggregationResultEntry(new Range(25, 50), 25),
+                    new RangeAggregationResultEntry(new Range(50, null), 50),
+                ]
+            ),
+        ];
+    }
+
+    private function createTermAggregationTestCase(
+        AggregationInterface $aggregation,
+        iterable $expectedEntries,
+        ?callable $mapper = null
+    ): array {
+        if ($mapper === null) {
+            $mapper = function ($key) {
+                return $key;
+            };
+        }
+
+        $entries = [];
+        foreach ($expectedEntries as $key => $count) {
+            $entries[] = new TermAggregationResultEntry($mapper($key), $count);
+        }
+
+        $expectedResult = TermAggregationResult::createForAggregation($aggregation, $entries);
+
+        return [$aggregation, $expectedResult];
+    }
+
+    private function createFieldAggregationFixtures(
+        string $contentTypeIdentifier,
+        string $fieldDefinitionIdentifier,
+        string $fieldTypeIdentifier,
+        iterable $values
+    ): void {
+        $contentType = $this->createContentTypeForFieldAggregation(
+            $contentTypeIdentifier,
+            $fieldDefinitionIdentifier,
+            $fieldTypeIdentifier
         );
+
+        $contentService = $this->getRepository()->getContentService();
+
+        foreach ($values as $value) {
+            $contentCreateStruct = $contentService->newContentCreateStruct($contentType, 'eng-GB');
+            $contentCreateStruct->setField($fieldDefinitionIdentifier, $value);
+
+            try {
+                $contentService->publishVersion(
+                    $contentService->createContent($contentCreateStruct)->versionInfo
+                );
+            } catch (ContentFieldValidationException $e) {
+                // TODO: Remove var_dump
+                var_dump($e->getFieldErrors());
+            }
+        }
+
+        $this->refreshSearch($this->getRepository());
+    }
+
+    private function createContentTypeForFieldAggregation(
+        string $contentTypeIdentifier,
+        string $fieldDefinitionIdentifier,
+        string $fieldTypeIdentifier
+    ): ContentType {
+        $contentTypeService = $this->getRepository()->getContentTypeService();
+
+        $contentTypeCreateStruct = $contentTypeService->newContentTypeCreateStruct($contentTypeIdentifier);
+        $contentTypeCreateStruct->mainLanguageCode = 'eng-GB';
+        $contentTypeCreateStruct->names = [
+            'eng-GB' => 'Field aggregation',
+        ];
+
+        $fieldDefinitionCreateStruct = $contentTypeService->newFieldDefinitionCreateStruct(
+            $fieldDefinitionIdentifier,
+            $fieldTypeIdentifier
+        );
+        $fieldDefinitionCreateStruct->names = [
+            'eng-GB' => 'Aggregated field',
+        ];
+        $fieldDefinitionCreateStruct->isSearchable = true;
+
+        $contentTypeCreateStruct->addFieldDefinition($fieldDefinitionCreateStruct);
+
+        $contentTypeDraft = $contentTypeService->createContentType(
+            $contentTypeCreateStruct,
+            [
+                $contentTypeService->loadContentTypeGroupByIdentifier('Content'),
+            ]
+        );
+
+        $contentTypeService->publishContentTypeDraft($contentTypeDraft);
+
+        return $contentTypeService->loadContentTypeByIdentifier($contentTypeIdentifier);
     }
 }

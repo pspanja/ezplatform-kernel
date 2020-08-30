@@ -9,6 +9,7 @@ declare(strict_types=1);
 namespace eZ\Publish\API\Repository\Values\Content\Search\AggregationResult;
 
 use Countable;
+use eZ\Publish\API\Repository\Values\Content\Query\AggregationInterface;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult;
 use Iterator;
 use IteratorAggregate;
@@ -18,7 +19,7 @@ class TermAggregationResult extends AggregationResult implements IteratorAggrega
     /** @var \eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResultEntry[] */
     private $entries;
 
-    public function __construct(string $name, array $entries = [])
+    public function __construct(string $name, iterable $entries = [])
     {
         parent::__construct($name);
 
@@ -74,5 +75,10 @@ class TermAggregationResult extends AggregationResult implements IteratorAggrega
         foreach ($this->entries as $entry) {
             yield $entry->getKey() => $entry->getCount();
         }
+    }
+
+    public static function createForAggregation(AggregationInterface $aggregation, iterable $entries = []): self
+    {
+        return new self($aggregation->getName(), $entries);
     }
 }
