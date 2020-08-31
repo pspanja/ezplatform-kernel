@@ -16,6 +16,9 @@ use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ContentTypeGroupT
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ContentTypeTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\DateMetadataRangeAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\CheckboxTermAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\CountryTermAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\FloatRangeAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\FloatStatsAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\IntegerRangeAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\IntegerStatsAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\LanguageTermAggregation;
@@ -336,6 +339,67 @@ final class SearchServiceAggregationTest extends BaseTest
                 [
                     new TermAggregationResultEntry(true, 3),
                     new TermAggregationResultEntry(false, 2),
+                ]
+            ),
+        ];
+
+        // yield CountryTermAggregation::class . '::TYPE_NAME' => [];
+        // yield CountryTermAggregation::class . '::IDC' => [];
+
+        yield CountryTermAggregation::class . '::TYPE_ALPHA_2' => [
+            new CountryTermAggregation('country_term', 'content_type', 'country'),
+            'ezcountry',
+            [
+                ['PL', 'EN'],
+                ['FR', 'EN'],
+                ['EN'],
+                ['GA', 'PL', 'FR'],
+                ['FR', 'BE', 'EN']
+            ],
+            new TermAggregationResult(
+                'country_term',
+                [
+                    new TermAggregationResultEntry('EN', 4),
+                    new TermAggregationResultEntry('FR', 3),
+                    new TermAggregationResultEntry('PL', 2),
+                    new TermAggregationResultEntry('GA', 1),
+                    new TermAggregationResultEntry('BE', 1),
+                ]
+            ),
+        ];
+
+        // yield CountryTermAggregation::class . '::TYPE_ALPHA_3' => [];
+
+        yield FloatStatsAggregation::class => [
+            new FloatStatsAggregation('float_stats', 'content_type', 'float'),
+            'ezfloat',
+            [1.0 . 2.5, 2.5, 5.25, 7.75],
+            new StatsAggregationResult(
+                'float_stats',
+                5,
+                1.0,
+                7.75,
+                3.8,
+                19.0
+            ),
+        ];
+
+        yield FloatRangeAggregation::class => [
+            new IntegerRangeAggregation('integer_range', 'content_type', 'integer', [
+                new Range(null, 10.0),
+                new Range(10.0, 25.0),
+                new Range(25.0, 50.0),
+                new Range(50.0, null),
+            ]),
+            'ezfloat',
+            range(1.0, 100.0, 2.5),
+            new RangeAggregationResult(
+                'integer_range',
+                [
+                    new RangeAggregationResultEntry(new Range(null, 10.0), 4),
+                    new RangeAggregationResultEntry(new Range(10.0, 25.0), 6),
+                    new RangeAggregationResultEntry(new Range(25, 50), 9),
+                    new RangeAggregationResultEntry(new Range(50, null), 19),
                 ]
             ),
         ];
