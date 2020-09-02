@@ -37,6 +37,7 @@ use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\StatsAggre
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResult;
 use eZ\Publish\API\Repository\Values\Content\Search\AggregationResult\TermAggregationResultEntry;
 use eZ\Publish\API\Repository\Values\ContentType\ContentType;
+use eZ\Publish\API\Repository\Values\ContentType\FieldDefinitionCreateStruct;
 use eZ\Publish\API\Repository\Values\ObjectState\ObjectState;
 use eZ\Publish\Core\FieldType\Checkbox\Value as CheckboxValue;
 
@@ -50,9 +51,6 @@ use eZ\Publish\Core\FieldType\Checkbox\Value as CheckboxValue;
  */
 final class SearchServiceAggregationTest extends BaseTest
 {
-    private const EXAMPLE_CONTENT_TYPE_IDENTIFIER = 'content_type';
-    private const EXAMPLE_FIELD_DEFINITION_IDENTIFIER = 'field';
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -269,13 +267,15 @@ final class SearchServiceAggregationTest extends BaseTest
         AggregationInterface $aggregation,
         string $fieldTypeIdentifier,
         iterable $fieldValues,
-        AggregationResult $expectedResult
+        AggregationResult $expectedResult,
+        ?callable $configureFieldDefinitionCreateStruct = null
     ): void {
         $this->createFieldAggregationFixtures(
             $aggregation->getContentTypeIdentifier(),
             $aggregation->getFieldDefinitionIdentifier(),
             $fieldTypeIdentifier,
-            $fieldValues
+            $fieldValues,
+            $configureFieldDefinitionCreateStruct
         );
 
         $searchService = $this->getRepository()->getSearchService();
@@ -300,13 +300,15 @@ final class SearchServiceAggregationTest extends BaseTest
         AggregationInterface $aggregation,
         string $fieldTypeIdentifier,
         iterable $fieldValues,
-        AggregationResult $expectedResult
+        AggregationResult $expectedResult,
+        ?callable $configureFieldDefinitionCreateStruct = null
     ): void {
         $this->createFieldAggregationFixtures(
             $aggregation->getContentTypeIdentifier(),
             $aggregation->getFieldDefinitionIdentifier(),
             $fieldTypeIdentifier,
-            $fieldValues
+            $fieldValues,
+            $configureFieldDefinitionCreateStruct
         );
 
         $searchService = $this->getRepository()->getSearchService();
@@ -343,32 +345,41 @@ final class SearchServiceAggregationTest extends BaseTest
             ),
         ];
 
-        // yield CountryTermAggregation::class . '::TYPE_NAME' => [];
-        // yield CountryTermAggregation::class . '::IDC' => [];
+        // yield CountryTermAggregation::class . '::TYPE_NAME' => [
+        //];
+        // yield CountryTermAggregation::class . '::IDC' => [
+        //];
 
         yield CountryTermAggregation::class . '::TYPE_ALPHA_2' => [
             new CountryTermAggregation('country_term', 'content_type', 'country'),
             'ezcountry',
             [
-                ['PL', 'EN'],
-                ['FR', 'EN'],
-                ['EN'],
+                ['PL', 'US'],
+                ['FR', 'US'],
+                ['US'],
                 ['GA', 'PL', 'FR'],
-                ['FR', 'BE', 'EN']
+                ['FR', 'BE', 'US']
             ],
             new TermAggregationResult(
                 'country_term',
                 [
-                    new TermAggregationResultEntry('EN', 4),
+                    new TermAggregationResultEntry('US', 4),
                     new TermAggregationResultEntry('FR', 3),
                     new TermAggregationResultEntry('PL', 2),
-                    new TermAggregationResultEntry('GA', 1),
                     new TermAggregationResultEntry('BE', 1),
+                    new TermAggregationResultEntry('GA', 1),
                 ]
             ),
+            static function(FieldDefinitionCreateStruct $createStruct): void {
+                $createStruct->fieldSettings = [
+                    'isMultiple' => true
+                ];
+            }
         ];
 
-        // yield CountryTermAggregation::class . '::TYPE_ALPHA_3' => [];
+        yield CountryTermAggregation::class . '::TYPE_ALPHA_3' => [
+            
+        ];
 
         yield FloatStatsAggregation::class => [
             new FloatStatsAggregation('float_stats', 'content_type', 'float'),
@@ -439,6 +450,18 @@ final class SearchServiceAggregationTest extends BaseTest
         ];
     }
 
+    private function dataProviderForTestCountryFieldAggregation(): iterable
+    {
+        $configureFieldDefinitionCreateStruct = static function(FieldDefinitionCreateStruct $createStruct): void {
+            $createStruct->fieldSettings = [
+                'isMultiple' => true
+            ];
+        };
+
+
+
+    }
+    
     private function createTermAggregationTestCase(
         AggregationInterface $aggregation,
         iterable $expectedEntries,
@@ -464,12 +487,14 @@ final class SearchServiceAggregationTest extends BaseTest
         string $contentTypeIdentifier,
         string $fieldDefinitionIdentifier,
         string $fieldTypeIdentifier,
-        iterable $values
+        iterable $values,
+        ?callable $configureFieldDefinitionCreateStruct = null
     ): void {
         $contentType = $this->createContentTypeForFieldAggregation(
             $contentTypeIdentifier,
             $fieldDefinitionIdentifier,
-            $fieldTypeIdentifier
+            $fieldTypeIdentifier,
+            $configureFieldDefinitionCreateStruct
         );
 
         $contentService = $this->getRepository()->getContentService();
@@ -494,7 +519,8 @@ final class SearchServiceAggregationTest extends BaseTest
     private function createContentTypeForFieldAggregation(
         string $contentTypeIdentifier,
         string $fieldDefinitionIdentifier,
-        string $fieldTypeIdentifier
+        string $fieldTypeIdentifier,
+        ?callable $configureFieldDefinitionCreateStruct = null
     ): ContentType {
         $contentTypeService = $this->getRepository()->getContentTypeService();
 
@@ -512,6 +538,10 @@ final class SearchServiceAggregationTest extends BaseTest
             'eng-GB' => 'Aggregated field',
         ];
         $fieldDefinitionCreateStruct->isSearchable = true;
+
+        if ($configureFieldDefinitionCreateStruct !== null) {
+            $configureFieldDefinitionCreateStruct($fieldDefinitionCreateStruct);
+        }
 
         $contentTypeCreateStruct->addFieldDefinition($fieldDefinitionCreateStruct);
 
