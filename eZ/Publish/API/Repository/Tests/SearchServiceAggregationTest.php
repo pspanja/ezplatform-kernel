@@ -17,6 +17,7 @@ use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\ContentTypeTermAg
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\DateMetadataRangeAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\CheckboxTermAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\CountryTermAggregation;
+use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\DateRangeAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\FloatRangeAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\FloatStatsAggregation;
 use eZ\Publish\API\Repository\Values\Content\Query\Aggregation\Field\IntegerRangeAggregation;
@@ -51,6 +52,14 @@ use eZ\Publish\Core\FieldType\Checkbox\Value as CheckboxValue;
  */
 final class SearchServiceAggregationTest extends BaseTest
 {
+    private const EXAMPLE_COUNTRY_FIELD_VALUES = [
+        ['PL', 'US'],
+        ['FR', 'US'],
+        ['US'],
+        ['GA', 'PL', 'FR'],
+        ['FR', 'BE', 'US']
+    ];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -67,7 +76,8 @@ final class SearchServiceAggregationTest extends BaseTest
     public function testFindContentWithAggregation(
         AggregationInterface $aggregation,
         AggregationResult $expectedResult
-    ): void {
+    ): void
+    {
         $searchService = $this->getRepository()->getSearchService();
 
         $query = new Query();
@@ -87,7 +97,8 @@ final class SearchServiceAggregationTest extends BaseTest
     public function testFindLocationWithAggregation(
         AggregationInterface $aggregation,
         AggregationResult $expectedResult
-    ): void {
+    ): void
+    {
         $searchService = $this->getRepository()->getSearchService();
 
         $query = new LocationQuery();
@@ -271,11 +282,14 @@ final class SearchServiceAggregationTest extends BaseTest
         ?callable $configureFieldDefinitionCreateStruct = null
     ): void {
         $this->createFieldAggregationFixtures(
-            $aggregation->getContentTypeIdentifier(),
+            $this->createContentTypeForFieldAggregation(
+                $aggregation->getContentTypeIdentifier(),
+                $aggregation->getFieldDefinitionIdentifier(),
+                $fieldTypeIdentifier,
+                $configureFieldDefinitionCreateStruct
+            ),
             $aggregation->getFieldDefinitionIdentifier(),
-            $fieldTypeIdentifier,
-            $fieldValues,
-            $configureFieldDefinitionCreateStruct
+            $fieldValues
         );
 
         $searchService = $this->getRepository()->getSearchService();
@@ -304,11 +318,14 @@ final class SearchServiceAggregationTest extends BaseTest
         ?callable $configureFieldDefinitionCreateStruct = null
     ): void {
         $this->createFieldAggregationFixtures(
-            $aggregation->getContentTypeIdentifier(),
+            $this->createContentTypeForFieldAggregation(
+                $aggregation->getContentTypeIdentifier(),
+                $aggregation->getFieldDefinitionIdentifier(),
+                $fieldTypeIdentifier,
+                $configureFieldDefinitionCreateStruct
+            ),
             $aggregation->getFieldDefinitionIdentifier(),
-            $fieldTypeIdentifier,
-            $fieldValues,
-            $configureFieldDefinitionCreateStruct
+            $fieldValues
         );
 
         $searchService = $this->getRepository()->getSearchService();
@@ -345,21 +362,41 @@ final class SearchServiceAggregationTest extends BaseTest
             ),
         ];
 
-        // yield CountryTermAggregation::class . '::TYPE_NAME' => [
-        //];
-        // yield CountryTermAggregation::class . '::IDC' => [
-        //];
+        yield CountryTermAggregation::class . '::TYPE_NAME' => [
+            new CountryTermAggregation(
+                'country_term',
+                'content_type',
+                'country',
+                CountryTermAggregation::TYPE_NAME
+            ),
+            'ezcountry',
+            self::EXAMPLE_COUNTRY_FIELD_VALUES,
+            new TermAggregationResult(
+                'country_term',
+                [
+                    new TermAggregationResultEntry('United States of America', 4),
+                    new TermAggregationResultEntry('France', 3),
+                    new TermAggregationResultEntry('Poland', 2),
+                    new TermAggregationResultEntry('Belgium', 1),
+                    new TermAggregationResultEntry('Gabon', 1),
+                ]
+            ),
+            static function (FieldDefinitionCreateStruct $createStruct): void {
+                $createStruct->fieldSettings = [
+                    'isMultiple' => true
+                ];
+            }
+        ];
 
         yield CountryTermAggregation::class . '::TYPE_ALPHA_2' => [
-            new CountryTermAggregation('country_term', 'content_type', 'country'),
+            new CountryTermAggregation(
+                'country_term',
+                'content_type',
+                'country',
+                CountryTermAggregation::TYPE_ALPHA_2
+            ),
             'ezcountry',
-            [
-                ['PL', 'US'],
-                ['FR', 'US'],
-                ['US'],
-                ['GA', 'PL', 'FR'],
-                ['FR', 'BE', 'US']
-            ],
+            self::EXAMPLE_COUNTRY_FIELD_VALUES,
             new TermAggregationResult(
                 'country_term',
                 [
@@ -370,7 +407,7 @@ final class SearchServiceAggregationTest extends BaseTest
                     new TermAggregationResultEntry('GA', 1),
                 ]
             ),
-            static function(FieldDefinitionCreateStruct $createStruct): void {
+            static function (FieldDefinitionCreateStruct $createStruct): void {
                 $createStruct->fieldSettings = [
                     'isMultiple' => true
                 ];
@@ -378,7 +415,75 @@ final class SearchServiceAggregationTest extends BaseTest
         ];
 
         yield CountryTermAggregation::class . '::TYPE_ALPHA_3' => [
-            
+            new CountryTermAggregation(
+                'country_term',
+                'content_type',
+                'country',
+                CountryTermAggregation::TYPE_ALPHA_3
+            ),
+            'ezcountry',
+            self::EXAMPLE_COUNTRY_FIELD_VALUES,
+            new TermAggregationResult(
+                'country_term',
+                [
+                    new TermAggregationResultEntry('USA', 4),
+                    new TermAggregationResultEntry('FRA', 3),
+                    new TermAggregationResultEntry('POL', 2),
+                    new TermAggregationResultEntry('BEL', 1),
+                    new TermAggregationResultEntry('GAB', 1),
+                ]
+            ),
+            static function (FieldDefinitionCreateStruct $createStruct): void {
+                $createStruct->fieldSettings = [
+                    'isMultiple' => true
+                ];
+            }
+        ];
+
+        yield CountryTermAggregation::class . '::TYPE_IDC' => [
+            new CountryTermAggregation(
+                'country_term',
+                'content_type',
+                'country',
+                CountryTermAggregation::TYPE_IDC
+            ),
+            'ezcountry',
+            self::EXAMPLE_COUNTRY_FIELD_VALUES,
+            new TermAggregationResult(
+                'country_term',
+                [
+                    new TermAggregationResultEntry(1, 4),
+                    new TermAggregationResultEntry(33, 3),
+                    new TermAggregationResultEntry(48, 2),
+                    new TermAggregationResultEntry(32, 1),
+                    new TermAggregationResultEntry(241, 1),
+                ]
+            ),
+            static function (FieldDefinitionCreateStruct $createStruct): void {
+                $createStruct->fieldSettings = [
+                    'isMultiple' => true
+                ];
+            }
+        ];
+
+        yield DateRangeAggregation::class => [
+            new DateRangeAggregation(
+                'date_range',
+                'content_type',
+                'date_field',
+                [
+                ]
+            ),
+            'ezdate',
+            [
+
+            ],
+            new RangeAggregationResult(
+                'date_range',
+                [
+
+                ]
+            )
         ];
 
         yield FloatStatsAggregation::class => [
@@ -450,18 +555,6 @@ final class SearchServiceAggregationTest extends BaseTest
         ];
     }
 
-    private function dataProviderForTestCountryFieldAggregation(): iterable
-    {
-        $configureFieldDefinitionCreateStruct = static function(FieldDefinitionCreateStruct $createStruct): void {
-            $createStruct->fieldSettings = [
-                'isMultiple' => true
-            ];
-        };
-
-
-
-    }
-    
     private function createTermAggregationTestCase(
         AggregationInterface $aggregation,
         iterable $expectedEntries,
@@ -484,19 +577,10 @@ final class SearchServiceAggregationTest extends BaseTest
     }
 
     private function createFieldAggregationFixtures(
-        string $contentTypeIdentifier,
+        ContentType $contentType,
         string $fieldDefinitionIdentifier,
-        string $fieldTypeIdentifier,
-        iterable $values,
-        ?callable $configureFieldDefinitionCreateStruct = null
+        iterable $values
     ): void {
-        $contentType = $this->createContentTypeForFieldAggregation(
-            $contentTypeIdentifier,
-            $fieldDefinitionIdentifier,
-            $fieldTypeIdentifier,
-            $configureFieldDefinitionCreateStruct
-        );
-
         $contentService = $this->getRepository()->getContentService();
 
         foreach ($values as $value) {
